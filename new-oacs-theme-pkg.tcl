@@ -55,14 +55,7 @@ file copy \
     "$servRoot/packages/$origPkgName" \
     "$servRoot/packages/$pkgName"
 
-set infoChannel [open "${servRoot}/packages/$origPkgName/$origPkgName.info"]
-set infotxt [read $infoChannel]
-close $infoChannel
-
 package require tdom
-
-set infodom [dom parse $infotxt]
-set infoRoot [$infodom documentElement]
 
 proc mk_underscore_names {origPkg newPkg origPkgUn newPkgUn} {
     upvar $origPkgUn origPkgUnderscores
@@ -84,15 +77,38 @@ proc mk_underscore_names {origPkg newPkg origPkgUn newPkgUn} {
             "_"]
 }
 
-proc xmlSubst {parent origPkg newPkg} {
-    set type [$parent nodeType]
-    set name [$parent nodeName]
-    set value [$parent nodeValue]
+proc xmlFileSubst {fileName origPkg newPkg} {
+    set infoChannel [open $fileName]
+    set infotxt [read $infoChannel]
+    close $infoChannel
+
+    set infodom [dom parse $infotxt]
+    set infoRoot [$infodom documentElement]
+
     mk_underscore_names \
         $origPkg \
         $newPkg \
         origPkgUnderscores \
         newPkgUnderscores
+
+    domSubtreeSubst \
+        $infoRoot \
+        $origPkg \
+        $newPkg \
+        $origPkgUnderscores \
+        $newPkgUnderscores
+
+    set infoxml [$infoRoot asXML]
+
+    set infoOutChannel [open "$fileName" "w"]
+    puts $infoOutChannel $infoxml
+    close $infoOutChannel
+}
+
+proc domSubtreeSubst {parent origPkg newPkg origPkgUnderscores newPkgUnderscores} {
+    set type [$parent nodeType]
+    set name [$parent nodeName]
+    set value [$parent nodeValue]
 
     if {$type != "ELEMENT_NODE"} then return
 
@@ -108,12 +124,18 @@ proc xmlSubst {parent origPkg newPkg} {
 
             regsub -- $origPkg $aValue $newPkg interValue
             regsub -- $origPkgUnderscores $interValue $newPkgUnderscores newValue
+
             $parent setAttribute $attrib $newValue
         }
     }
  
     foreach child [$parent childNodes] {
-        xmlSubst $child $origPkg $newPkg
+        domSubtreeSubst \
+            $child \
+            $origPkg \
+            $newPkg \
+            $origPkgUnderscores \
+            $newPkgUnderscores
     }
 }
 
@@ -163,21 +185,6 @@ proc explore {parent indent} {
         explore $child "$indent  "
     }
 }
-
-# explore $infoRoot ""
-xmlSubst $infoRoot $origPkgName $pkgName
-# explore $infoRoot ""
-
-set infoxml [$infoRoot asXML]
-
-set infoOutChannel \
-    [open \
-        "$servRoot/packages/$pkgName/$pkgName.info" \
-        "w"]
-
-puts $infoOutChannel $infoxml
-close $infoOutChannel
-file delete "$servRoot/packages/$pkgName/$origPkgName.info"
 
 proc findFiles {root} {
     set dirs \
@@ -231,9 +238,19 @@ foreach xmlFile $xmlFiles {
             $xmlFile]
 }
 
+# add info file so it gets processed as xml
+
+lappend xmlFiles $infoFile
+
 # process the files in pkgFiles as plain text
 
 foreach pkgFile $pkgFiles {
     plainTextSubst $pkgFile $origPkgName $pkgName
+}
+
+#process the xml files (incl the info file)
+
+foreach xmlFile $xmlFiles {
+    xmlFileSubst $xmlFile $origPkgName $pkgName
 }
 
