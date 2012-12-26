@@ -214,7 +214,33 @@ proc findFiles {root} {
 # all files (not dirs) in the new package
 set pkgFiles [findFiles "$servRoot/packages/$pkgName/"]
 
-# remove info file from list
+# do the file renames
+set fileRenames [lsearch -all -inline -glob $pkgFiles "*$origPkgName*"]
+
+set renameTos [list]
+foreach fileRename $fileRenames {
+    regsub $origPkgName $fileRename $pkgName renameTo
+
+    lappend renameTos $renameTo
+
+    file rename $fileRename $renameTo
+
+    # remove this file from the list
+    set pkgFiles \
+        [lsearch \
+            -all -inline -exact -not \
+            $pkgFiles \
+            $fileRename]
+}
+
+# adjust pkgFiles after rename (remove original name, add new name)
+
+set pkgFiles \
+    [concat \
+        $renameTos \
+        $pkgFiles]
+
+# locate info file, remove from list
 set infoFile [lsearch -inline -glob $pkgFiles "*.info"]
 set pkgFiles [lsearch -all -inline -exact -not $pkgFiles $infoFile]
 
@@ -248,7 +274,7 @@ foreach pkgFile $pkgFiles {
     plainTextSubst $pkgFile $origPkgName $pkgName
 }
 
-#process the xml files (incl the info file)
+# process the xml files (incl the info file)
 
 foreach xmlFile $xmlFiles {
     xmlFileSubst $xmlFile $origPkgName $pkgName
