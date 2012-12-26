@@ -33,6 +33,22 @@ set pkgNameStem [lindex $argv 1]
 set pkgName "$pkgNameStem-theme"
 set origPkgName "openacs-default-theme"
 
+# someday we might want to copy a theme that's not 
+# openacs-default-theme. So we check and set origThemeKey 
+# accordingly. Then if someday comes, this part of the job
+# will be done.
+
+set themeKeyStem $pkgNameStem
+
+if {$origPkgName eq "openacs-default-theme"} {
+    set origThemeKeyStem "default"
+} else {
+    set origThemeKeyStem [regsub -- "-theme" $origPkgName ""]
+}
+
+regsub -all -- "-" $origThemeKeyStem "_" origThemeKeyStem
+regsub -all -- "-" $themeKeyStem "_" themeKeyStem
+
 if {[llength $argv] !=2} {
     puts stderr "usage: $argv0 <servRoot> <pkgNameStem>"
     exit 1
@@ -139,7 +155,7 @@ proc domSubtreeSubst {parent origPkg newPkg origPkgUnderscores newPkgUnderscores
     }
 }
 
-proc plainTextSubst {fileName origPkg newPkg} {
+proc plainTextSubst {fileName origPkg newPkg origThemeKeyStem themeKeyStem} {
     mk_underscore_names \
         $origPkg \
         $newPkg \
@@ -150,8 +166,24 @@ proc plainTextSubst {fileName origPkg newPkg} {
     set txt [read $inChan]
     close $inChan
 
+    # do packagename replacements
     regsub -all "$origPkg" $txt "$newPkg" txt
     regsub -all "$origPkgUnderscores" $txt "$newPkgUnderscores" txt
+
+    # do theme key replacements
+    regsub \
+        -all \
+        "${origThemeKeyStem}_plain" \
+        $txt \
+        "${themeKeyStem}_plain" \
+        txt
+
+    regsub \
+        -all \
+        "${origThemeKeyStem}_tabbed" \
+        $txt \
+        "${themeKeyStem}_tabbed" \
+        txt
 
     set outChan [open $fileName "w"]
     puts -nonewline $outChan $txt
@@ -271,7 +303,7 @@ lappend xmlFiles $infoFile
 # process the files in pkgFiles as plain text
 
 foreach pkgFile $pkgFiles {
-    plainTextSubst $pkgFile $origPkgName $pkgName
+    plainTextSubst $pkgFile $origPkgName $pkgName $origThemeKeyStem $themeKeyStem
 }
 
 # process the xml files (incl the info file)
