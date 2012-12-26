@@ -31,6 +31,7 @@
 set servRoot [lindex $argv 0]
 set pkgNameStem [lindex $argv 1]
 set pkgName "$pkgNameStem-theme"
+set origPkgName "openacs-default-theme"
 
 if {[llength $argv] !=2} {
     puts stderr "usage: $argv0 <servRoot> <pkgNameStem>"
@@ -51,10 +52,10 @@ if {[regexp -- "-theme$" $pkgNameStem match]} {
 }
 
 file copy \
-    "$servRoot/packages/openacs-default-theme" \
+    "$servRoot/packages/$origPkgName" \
     "$servRoot/packages/$pkgName"
 
-set infoChannel [open "${servRoot}/packages/openacs-default-theme/openacs-default-theme.info"]
+set infoChannel [open "${servRoot}/packages/$origPkgName/$origPkgName.info"]
 set infotxt [read $infoChannel]
 close $infoChannel
 
@@ -63,10 +64,10 @@ package require tdom
 set infodom [dom parse $infotxt]
 set infoRoot [$infodom documentElement]
 
-proc subst {parent origPkg newPkg} {
-    set type [$parent nodeType]
-    set name [$parent nodeName]
-    set value [$parent nodeValue]
+proc mk_underscore_names {origPkg newPkg origPkgUn newPkgUn} {
+    upvar $origPkgUn origPkgUnderscores
+    upvar $newPkgUn newPkgUnderscores
+
     set origPkgUnderscores \
         [regsub \
             -all \
@@ -81,6 +82,17 @@ proc subst {parent origPkg newPkg} {
             "-" \
             $newPkg \
             "_"]
+}
+
+proc xmlSubst {parent origPkg newPkg} {
+    set type [$parent nodeType]
+    set name [$parent nodeName]
+    set value [$parent nodeValue]
+    mk_underscore_names \
+        $origPkg \
+        $newPkg \
+        origPkgUnderscores \
+        newPkgUnderscores
 
     if {$type != "ELEMENT_NODE"} then return
 
@@ -101,8 +113,27 @@ proc subst {parent origPkg newPkg} {
     }
  
     foreach child [$parent childNodes] {
-        subst $child $origPkg $newPkg
+        xmlSubst $child $origPkg $newPkg
     }
+}
+
+proc plainTextSubst {fileName origPkg newPkg} {
+    mk_underscore_names \
+        $origPkg \
+        $newPkg \
+        origPkgUnderscores \
+        newPkgUnderscores
+
+    set inChan [open $fileName]
+    set txt [read $inChan]
+    close $inChan
+
+    regsub -all "$origPkg" $txt "$newPkg" txt
+    regsub -all "$origPkgUnderscores" $txt "$newPkgUnderscores" txt
+
+    set outChan [open $fileName "w"]
+    puts -nonewline $outChan $txt
+    close $outChan
 }
 
 proc explore {parent indent} {
@@ -134,7 +165,7 @@ proc explore {parent indent} {
 }
 
 # explore $infoRoot ""
-subst $infoRoot "openacs-default-theme" $pkgName
+xmlSubst $infoRoot $origPkgName $pkgName
 # explore $infoRoot ""
 
 set infoxml [$infoRoot asXML]
@@ -146,7 +177,7 @@ set infoOutChannel \
 
 puts $infoOutChannel $infoxml
 close $infoOutChannel
-file delete "$servRoot/packages/$pkgName/openacs-default-theme.info"
+file delete "$servRoot/packages/$pkgName/$origPkgName.info"
 
 proc findFiles {root} {
     set dirs \
@@ -200,7 +231,9 @@ foreach xmlFile $xmlFiles {
             $xmlFile]
 }
 
-puts $pkgFiles
+# process the files in pkgFiles as plain text
 
-#open \
-#   "$servRoot/packages/$pkgName/
+foreach pkgFile $pkgFiles {
+    plainTextSubst $pkgFile $origPkgName $pkgName
+}
+
