@@ -223,9 +223,25 @@ proc explore {parent indent} {
     set name [$parent nodeName]
     set value [$parent nodeValue]
  
-    puts "$indent$parent is a $type node named $name with value $value"
-
     if {$type != "ELEMENT_NODE"} then return
+
+    puts "$indent$parent is a $type node named $name"
+    
+    set txtNode ""
+
+    set childNodes [$parent childNodes]
+
+    if {[llength $childNodes]} {
+        foreach childNode $childNodes {
+            if {[$childNode nodeName] eq "#text"} {
+                set txtNode $childNode
+            }
+        }
+        
+        if {[string length "$txtNode"]} {
+            puts "$indent  text node with value [$txtNode nodeValue]"
+        }
+    }
 
     set attribs [$parent attributes]
  
@@ -238,11 +254,11 @@ proc explore {parent indent} {
             append attrList "$attrib=\"$aValue\""
         }
 
-        puts "${indent}attribs: [join $attrList {, }]"
+        puts "${indent}  attribs: [join $attrList {, }]"
     }
  
-    foreach child [$parent childNodes] {
-        explore $child "$indent  "
+    foreach child $childNodes {
+        explore $child "$indent    "
     }
 }
 
@@ -338,4 +354,20 @@ foreach xmlFile $xmlFiles {
 
 # process info file
 infoFileSubst $infoFile $origPkgName $pkgName
+
+# (removeMe) let's look at the tree
+set infoChan [open "$servRoot/packages/$pkgName/$pkgName.info"]
+set infoTxt [read $infoChan]
+close $infoChan
+set infoDoc [dom parse $infoTxt]
+set infoRoot [$infoDoc documentElement]
+#explore $infoRoot ""
+
+puts pkgnamenode
+set pkgNameNode [$infoRoot selectNode "/package/package-name"]
+explore $pkgNameNode ""
+
+puts pkgPrettyPluralNode
+set pkgPrettyPluralNode [$infoRoot selectNode "/package/pretty-plural"]
+explore $pkgPrettyPluralNode ""
 
