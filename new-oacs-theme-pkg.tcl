@@ -93,6 +93,34 @@ proc mk_underscore_names {origPkg newPkg origPkgUn newPkgUn} {
             "_"]
 }
 
+proc infoFileSubst {fileName origPkg newPkg} {
+    set infoChannel [open $fileName]
+    set infotxt [read $infoChannel]
+    close $infoChannel
+
+    set infodom [dom parse $infotxt]
+    set infoRoot [$infodom documentElement]
+
+    mk_underscore_names \
+        $origPkg \
+        $newPkg \
+        origPkgUnderscores \
+        newPkgUnderscores
+
+    domSubtreeSubst \
+        $infoRoot \
+        $origPkg \
+        $newPkg \
+        $origPkgUnderscores \
+        $newPkgUnderscores
+
+    set infoxml [$infoRoot asXML]
+
+    set infoOutChannel [open "$fileName" "w"]
+    puts $infoOutChannel $infoxml
+    close $infoOutChannel
+}
+
 proc xmlFileSubst {fileName origPkg newPkg} {
     set infoChannel [open $fileName]
     set infotxt [read $infoChannel]
@@ -296,19 +324,18 @@ foreach xmlFile $xmlFiles {
             $xmlFile]
 }
 
-# add info file so it gets processed as xml
-
-lappend xmlFiles $infoFile
-
 # process the files in pkgFiles as plain text
 
 foreach pkgFile $pkgFiles {
     plainTextSubst $pkgFile $origPkgName $pkgName $origThemeKeyStem $themeKeyStem
 }
 
-# process the xml files (incl the info file)
+# process the xml files (NOT incl the info file)
 
 foreach xmlFile $xmlFiles {
     xmlFileSubst $xmlFile $origPkgName $pkgName
 }
+
+# process info file
+infoFileSubst $infoFile $origPkgName $pkgName
 
