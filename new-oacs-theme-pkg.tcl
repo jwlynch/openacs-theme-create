@@ -93,13 +93,33 @@ proc mk_underscore_names {origPkg newPkg origPkgUn newPkgUn} {
             "_"]
 }
 
-proc infoFileSubst {fileName origPkg newPkg} {
+proc setElementValueAt {rootNode treePath newValue} {
+    set elementNode [$rootNode selectNode $treePath]
+
+    set textNode [getTxtNodeChildOf $elementNode]
+
+    if {"$textNode" ne ""} {
+        $textNode nodeValue $newValue
+    }
+}
+
+proc infoFileSubst {fileName origPkg newPkg newPkgStem} {
     set infoChannel [open $fileName]
     set infotxt [read $infoChannel]
     close $infoChannel
 
     set infodom [dom parse $infotxt]
     set infoRoot [$infodom documentElement]
+
+    setElementValueAt \
+        $infoRoot \
+        "/package/package-name" \
+        "Theme for $newPkgStem Subsites"
+
+    setElementValueAt \
+        $infoRoot \
+        "/package/pretty-plural" \
+        "Themes for $newPkgStem Subsites"
 
     mk_underscore_names \
         $origPkg \
@@ -218,15 +238,7 @@ proc plainTextSubst {fileName origPkg newPkg origThemeKeyStem themeKeyStem} {
     close $outChan
 }
 
-proc explore {parent indent} {
-    set type [$parent nodeType]
-    set name [$parent nodeName]
-    set value [$parent nodeValue]
- 
-    if {$type != "ELEMENT_NODE"} then return
-
-    puts "$indent$parent is a $type node named $name"
-    
+proc getTxtNodeChildOf {parent} {
     set txtNode ""
 
     set childNodes [$parent childNodes]
@@ -237,10 +249,23 @@ proc explore {parent indent} {
                 set txtNode $childNode
             }
         }
-        
-        if {[string length "$txtNode"]} {
-            puts "$indent  text node with value [$txtNode nodeValue]"
-        }
+    }
+
+    return $txtNode
+}
+
+proc explore {parent indent} {
+    set type [$parent nodeType]
+    set name [$parent nodeName]
+    set value [$parent nodeValue]
+ 
+    if {$type != "ELEMENT_NODE"} then return
+
+    puts "$indent$parent is a $type node named $name"
+    
+    set txtNode [getTxtNodeChildOf $parent]
+    if {"$txtNode" ne ""} {
+        puts "$indent  element value is [$txtNode nodeValue]"
     }
 
     set attribs [$parent attributes]
@@ -251,13 +276,13 @@ proc explore {parent indent} {
         foreach attrib $attribs {
             set aValue [$parent getAttribute $attrib ""]
 
-            append attrList "$attrib=\"$aValue\""
+            lappend attrList "$attrib=\"$aValue\""
         }
 
         puts "${indent}  attribs: [join $attrList {, }]"
     }
  
-    foreach child $childNodes {
+    foreach child [$parent childNodes] {
         explore $child "$indent    "
     }
 }
@@ -353,21 +378,5 @@ foreach xmlFile $xmlFiles {
 }
 
 # process info file
-infoFileSubst $infoFile $origPkgName $pkgName
-
-# (removeMe) let's look at the tree
-set infoChan [open "$servRoot/packages/$pkgName/$pkgName.info"]
-set infoTxt [read $infoChan]
-close $infoChan
-set infoDoc [dom parse $infoTxt]
-set infoRoot [$infoDoc documentElement]
-#explore $infoRoot ""
-
-puts pkgnamenode
-set pkgNameNode [$infoRoot selectNode "/package/package-name"]
-explore $pkgNameNode ""
-
-puts pkgPrettyPluralNode
-set pkgPrettyPluralNode [$infoRoot selectNode "/package/pretty-plural"]
-explore $pkgPrettyPluralNode ""
+infoFileSubst $infoFile $origPkgName $pkgName $pkgNameStem
 
